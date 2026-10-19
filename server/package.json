@@ -1,12 +1,12 @@
 {
-  "name": "KathaVerse-server",
+  "name": "kathaverse-server",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/app.ts",
-    "build": "tsc",
-    "start": "node dist/app.js",
+    "build": "prisma generate && tsc",
+    "start": "prisma migrate deploy && node dist/app.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",

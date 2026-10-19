@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "websiteUrl" TEXT, ADD COLUMN "instagramUrl" TEXT, ADD COLUMN "facebookUrl" TEXT, ADD COLUMN "youtubeUrl" TEXT, ADD COLUMN "tiktokUrl" TEXT, ADD COLUMN "githubUrl" TEXT, ADD COLUMN "linkedinUrl" TEXT;

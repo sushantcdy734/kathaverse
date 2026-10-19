@@ -1,0 +1,23 @@
+# Dependencies and build output
+node_modules/
+**/node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# User uploads and runtime logs
+uploads/
+server/uploads/
+*.log
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

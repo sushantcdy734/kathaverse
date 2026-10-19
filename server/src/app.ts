@@ -90,7 +90,7 @@ async function saveImageData(data: unknown): Promise<string> {
 // Video media is streamed to disk (not buffered in memory). MP4/MOV and WebM are accepted;
 // playback uses the browser's native HTML5 player and Express static supports byte ranges.
 const VIDEO_MAX_BYTES = 200 * 1024 * 1024;
-app.get("/api/videos", async (req, res) => {
+app.get("/api/videos", async (req: express.Request, res: express.Response) => {
   try {
     const type = req.query.type === "SHORT" ? "SHORT" : req.query.type === "VIDEO" ? "VIDEO" : undefined;
     const page = Math.max(1, Number.parseInt(String(req.query.page || "1"), 10) || 1);
@@ -104,7 +104,7 @@ app.get("/api/videos", async (req, res) => {
     return res.json({ success: true, data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (error) { return databaseUnavailable(res, error); }
 });
-app.delete("/api/videos/:id", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res) => {
+app.delete("/api/videos/:id", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma();
     const video = await db.video.findUnique({ where: { id: String(req.params.id) }, select: { id: true, filePath: true, uploaderId: true } });
@@ -118,7 +118,7 @@ app.delete("/api/videos/:id", auth, roles("CREATOR", "ADMIN"), async (req: AuthR
     return res.json({ success: true });
   } catch (error) { return databaseUnavailable(res, error); }
 });
-app.get("/api/videos/:id", async (req, res) => {
+app.get("/api/videos/:id", async (req: express.Request, res: express.Response) => {
   try {
     const data = await getPrisma().video.findUnique({ where: { id: String(req.params.id) },
       select: { id: true, title: true, description: true, type: true, category: true, tags: true, filePath: true, mimeType: true, sizeBytes: true, createdAt: true, uploader: { select: { username: true, displayName: true } } } });
@@ -126,7 +126,7 @@ app.get("/api/videos/:id", async (req, res) => {
     return res.json({ success: true, data });
   } catch (error) { return databaseUnavailable(res, error); }
 });
-app.post("/api/videos", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res) => {
+app.post("/api/videos", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res: express.Response) => {
   const title = String(req.query.title || "").trim().slice(0, 160);
   const description = String(req.query.description || "").trim().slice(0, 3000);
   const type = req.query.type === "SHORT" ? "SHORT" : "VIDEO";
@@ -176,7 +176,7 @@ app.post("/api/videos", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest
 
 // Social interaction APIs. All mutations are authenticated and counts are derived from the database.
 const socialText = (value: unknown, max = 4000) => typeof value === "string" ? value.trim().slice(0, max) : "";
-app.get("/api/social/stories/:storyId", async (req, res) => {
+app.get("/api/social/stories/:storyId", async (req: express.Request, res: express.Response) => {
   try {
     const db = getPrisma(), storyId = String(req.params.storyId);
     const [likes, rating, ratings, comments] = await Promise.all([
@@ -188,13 +188,13 @@ app.get("/api/social/stories/:storyId", async (req, res) => {
     return res.json({ success: true, data: { likes, averageRating: rating._avg.score ?? 0, ratingCount: rating._count._all, ratingDistribution: ratings, comments } });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.get("/api/social/stories/:storyId/like", auth, async (req: AuthRequest, res) => {
+app.get("/api/social/stories/:storyId/like", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const item = await getPrisma().like.findUnique({ where: { userId_targetType_targetId: { userId: req.user!.id, targetType: "STORY", targetId: String(req.params.storyId) } } });
     return res.json({ success: true, liked: Boolean(item) });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.post("/api/social/stories/:storyId/like", auth, async (req: AuthRequest, res) => {
+app.post("/api/social/stories/:storyId/like", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma(), storyId = String(req.params.storyId);
     const story = await db.story.findUnique({ where: { id: storyId }, select: { id: true, creatorId: true, title: true } });
@@ -206,20 +206,20 @@ app.post("/api/social/stories/:storyId/like", auth, async (req: AuthRequest, res
       await db.like.create({ data: { userId: req.user!.id, targetType: "STORY", targetId: storyId, storyId } });
       if (story.creatorId !== req.user!.id) {
         const preference = await db.notificationPreference.findUnique({ where: { userId: story.creatorId } });
-        if (preference?.likes !== false) await db.notification.create({ data: { userId: story.creatorId, type: "LIKE", title: "Your story got a like", body: `${req.user!.username} liked â€œ${story.title}â€.`, link: `/story/${storyId}` } });
+        if (preference?.likes !== false) await db.notification.create({ data: { userId: story.creatorId, type: "LIKE", title: "Your story got a like", body: `${req.user!.username} liked "${story.title}".`, link: `/story/${storyId}` } });
       }
     }
     const likes = await db.like.count({ where: { targetType: "STORY", targetId: storyId } });
     return res.json({ success: true, liked: !existing, likes });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.get("/api/social/stories/:storyId/rating", auth, async (req: AuthRequest, res) => {
+app.get("/api/social/stories/:storyId/rating", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const rating = await getPrisma().rating.findUnique({ where: { userId_storyId: { userId: req.user!.id, storyId: String(req.params.storyId) } }, select: { score: true } });
     return res.json({ success: true, score: rating?.score ?? 0 });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.put("/api/social/stories/:storyId/rating", auth, async (req: AuthRequest, res) => {
+app.put("/api/social/stories/:storyId/rating", auth, async (req: AuthRequest, res: express.Response) => {
   const score = Number(req.body?.score);
   if (!Number.isInteger(score) || score < 1 || score > 5) return fail(res, 400, "Rating must be an integer from 1 to 5.");
   try {
@@ -231,7 +231,7 @@ app.put("/api/social/stories/:storyId/rating", auth, async (req: AuthRequest, re
     return res.json({ success: true, data: rating, averageRating: aggregate._avg.score ?? 0, ratingCount: aggregate._count._all });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.delete("/api/social/stories/:storyId/rating", auth, async (req: AuthRequest, res) => {
+app.delete("/api/social/stories/:storyId/rating", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma(), storyId = String(req.params.storyId);
     await db.rating.deleteMany({ where: { userId: req.user!.id, storyId } });
@@ -239,7 +239,7 @@ app.delete("/api/social/stories/:storyId/rating", auth, async (req: AuthRequest,
     return res.json({ success: true, averageRating: aggregate._avg.score ?? 0, ratingCount: aggregate._count._all });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.get("/api/social/stories/:storyId/reviews", async (req, res) => {
+app.get("/api/social/stories/:storyId/reviews", async (req: express.Request, res: express.Response) => {
   const page = Math.max(1, Number(req.query.page) || 1), limit = Math.min(50, Math.max(1, Number(req.query.limit) || 10));
   const sort = req.query.sort === "helpful" ? "helpful" : "recent";
   try {
@@ -250,7 +250,7 @@ app.get("/api/social/stories/:storyId/reviews", async (req, res) => {
     return res.json({ success: true, data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.post("/api/social/stories/:storyId/reviews", auth, communityRateLimit, async (req: AuthRequest, res) => {
+app.post("/api/social/stories/:storyId/reviews", auth, communityRateLimit, async (req: AuthRequest, res: express.Response) => {
   const body = socialText(req.body?.body, 3000);
   if (body.length < 10) return fail(res, 400, "A written review must contain at least 10 characters.");
   try {
@@ -260,31 +260,31 @@ app.post("/api/social/stories/:storyId/reviews", auth, communityRateLimit, async
     const review = await db.review.upsert({ where: { userId_storyId: { userId: req.user!.id, storyId } }, create: { userId: req.user!.id, storyId, body }, update: { body } });
     if (story.creatorId !== req.user!.id) {
       const preference = await db.notificationPreference.findUnique({ where: { userId: story.creatorId } });
-      if (preference?.comments !== false) await db.notification.create({ data: { userId: story.creatorId, type: "REVIEW", title: "New reader review", body: `${req.user!.username} reviewed â€œ${story.title}â€.`, link: `/story/${story.slug}`, dedupeKey: `review:${review.id}:updated:${review.updatedAt.getTime()}` } });
+      if (preference?.comments !== false) await db.notification.create({ data: { userId: story.creatorId, type: "REVIEW", title: "New reader review", body: `${req.user!.username} reviewed "${story.title}".`, link: `/story/${story.slug}`, dedupeKey: `review:${review.id}:updated:${review.updatedAt.getTime()}` } });
     }
     return res.status(201).json({ success: true, data: review });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.patch("/api/social/reviews/:id", auth, async (req: AuthRequest, res) => {
+app.patch("/api/social/reviews/:id", auth, async (req: AuthRequest, res: express.Response) => {
   const body = socialText(req.body?.body, 3000); if (body.length < 10) return fail(res, 400, "A written review must contain at least 10 characters.");
   try { const db = getPrisma(), review = await db.review.findUnique({ where: { id: String(req.params.id) } }); if (!review) return fail(res, 404, "Review not found."); if (review.userId !== req.user!.id) return fail(res, 403, "You can only edit your own review."); return res.json({ success: true, data: await db.review.update({ where: { id: review.id }, data: { body } }) }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
-app.delete("/api/social/reviews/:id", auth, async (req: AuthRequest, res) => {
+app.delete("/api/social/reviews/:id", auth, async (req: AuthRequest, res: express.Response) => {
   try { const db = getPrisma(), review = await db.review.findUnique({ where: { id: String(req.params.id) } }); if (!review) return fail(res, 404, "Review not found."); if (review.userId !== req.user!.id && req.user!.role !== "ADMIN") return fail(res, 403, "You can only delete your own review."); await db.review.delete({ where: { id: review.id } }); return res.json({ success: true }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
-app.post("/api/social/reviews/:id/helpful", auth, async (req: AuthRequest, res) => {
+app.post("/api/social/reviews/:id/helpful", auth, async (req: AuthRequest, res: express.Response) => {
   try { const db = getPrisma(), reviewId = String(req.params.id); if (!await db.review.findUnique({ where: { id: reviewId }, select: { id: true } })) return fail(res, 404, "Review not found."); const key = { reviewId_userId: { reviewId, userId: req.user!.id } }; const existing = await db.reviewHelpful.findUnique({ where: key }); if (existing) await db.reviewHelpful.delete({ where: { id: existing.id } }); else await db.reviewHelpful.create({ data: { reviewId, userId: req.user!.id } }); return res.json({ success: true, helpful: !existing, count: await db.reviewHelpful.count({ where: { reviewId } }) }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
-app.post("/api/social/reviews/:id/report", auth, communityRateLimit, async (req: AuthRequest, res) => {
+app.post("/api/social/reviews/:id/report", auth, communityRateLimit, async (req: AuthRequest, res: express.Response) => {
   const reason = socialText(req.body?.reason, 1000); if (reason.length < 5) return fail(res, 400, "Please provide a reason of at least 5 characters.");
   try { const db = getPrisma(), review = await db.review.findUnique({ where: { id: String(req.params.id) }, select: { id: true, storyId: true } }); if (!review) return fail(res, 404, "Review not found."); const existing = await db.contentReport.findFirst({ where: { reporterId: req.user!.id, reviewId: review.id, status: "PENDING" } }); if (existing) return fail(res, 409, "You have already reported this review."); await db.contentReport.create({ data: { reporterId: req.user!.id, reviewId: review.id, storyId: review.storyId, reason } }); return res.status(201).json({ success: true, message: "Review reported for moderation." }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
 
-app.get("/api/social/stories/:storyId/comments", async (req, res) => {
+app.get("/api/social/stories/:storyId/comments", async (req: express.Request, res: express.Response) => {
   const page = Math.max(1, Number(req.query.page) || 1), limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
   try {
     const db = getPrisma(), storyId = String(req.params.storyId);
@@ -296,7 +296,7 @@ app.get("/api/social/stories/:storyId/comments", async (req, res) => {
     return res.json({ success: true, data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.post("/api/social/stories/:storyId/comments", auth, communityRateLimit, async (req: AuthRequest, res) => {
+app.post("/api/social/stories/:storyId/comments", auth, communityRateLimit, async (req: AuthRequest, res: express.Response) => {
   const body = socialText(req.body?.body, 3000), parentId = req.body?.parentId ? String(req.body.parentId) : null;
   if (body.length < 1) return fail(res, 400, "Comment cannot be empty.");
   try {
@@ -319,13 +319,13 @@ app.post("/api/social/stories/:storyId/comments", auth, communityRateLimit, asyn
       const recipientIds = [...recipients];
       const prefs = await db.notificationPreference.findMany({ where: { userId: { in: recipientIds } }, select: { userId: true, comments: true } });
       const disabled = new Set(prefs.filter(p => !p.comments).map(p => p.userId));
-      const notifications = recipientIds.filter(id => !disabled.has(id)).map(id => ({ userId: id, type: "COMMENT", title: parentId ? "New reply to a comment" : "New comment on your story", body: `${req.user!.username} commented on â€œ${storyOwner?.title || "a story"}â€.`, link: `/story/${storyId}`, dedupeKey: `comment:${comment.id}:user:${id}` }));
+      const notifications = recipientIds.filter(id => !disabled.has(id)).map(id => ({ userId: id, type: "COMMENT", title: parentId ? "New reply to a comment" : "New comment on your story", body: `${req.user!.username} commented on "${storyOwner?.title || "a story"}".`, link: `/story/${storyId}`, dedupeKey: `comment:${comment.id}:user:${id}` }));
       if (notifications.length) await db.notification.createMany({ data: notifications, skipDuplicates: true });
     }
     return res.status(201).json({ success: true, data: comment });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.patch("/api/social/comments/:id", auth, async (req: AuthRequest, res) => {
+app.patch("/api/social/comments/:id", auth, async (req: AuthRequest, res: express.Response) => {
   const body = socialText(req.body?.body, 3000);
   if (!body) return fail(res, 400, "Comment cannot be empty.");
   try {
@@ -335,7 +335,7 @@ app.patch("/api/social/comments/:id", auth, async (req: AuthRequest, res) => {
     return res.json({ success: true, data: await db.comment.update({ where: { id: old.id }, data: { body } }) });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.delete("/api/social/comments/:id", auth, async (req: AuthRequest, res) => {
+app.delete("/api/social/comments/:id", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma(), old = await db.comment.findUnique({ where: { id: String(req.params.id) } });
     if (!old) return fail(res, 404, "Comment not found.");
@@ -343,7 +343,7 @@ app.delete("/api/social/comments/:id", auth, async (req: AuthRequest, res) => {
     await db.comment.delete({ where: { id: old.id } }); return res.json({ success: true });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.get("/api/creators/:creatorId", async (req, res) => {
+app.get("/api/creators/:creatorId", async (req: express.Request, res: express.Response) => {
   try {
     const db = getPrisma(), creatorId = String(req.params.creatorId);
     const creator = await db.user.findFirst({ where: { id: creatorId, role: "CREATOR", accountStatus: "ACTIVE" }, select: { id: true, username: true, displayName: true, bio: true, avatarPath: true, websiteUrl: true, instagramUrl: true, facebookUrl: true, youtubeUrl: true, tiktokUrl: true, githubUrl: true, linkedinUrl: true, createdAt: true, stories: { where: { publication: "PUBLISHED" }, orderBy: { updatedAt: "desc" }, select: { id: true, slug: true, title: true, synopsis: true, coverPath: true, contentType: true, status: true, genres: { include: { genre: { select: { name: true, slug: true } } } }, _count: { select: { chapters: true, ratings: true } } } } } });
@@ -356,12 +356,12 @@ app.get("/api/creators/:creatorId", async (req, res) => {
     return res.json({ success: true, data: { ...creator, followers, likes, averageRating: ratings.length ? Math.round(ratings.reduce((sum, r) => sum + r.score, 0) / ratings.length * 100) / 100 : 0, ratingCount: ratings.length } });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.get("/api/social/creators/:creatorId/following", auth, async (req: AuthRequest, res) => {
+app.get("/api/social/creators/:creatorId/following", auth, async (req: AuthRequest, res: express.Response) => {
   try { const following = await getPrisma().creatorFollow.findUnique({ where: { followerId_creatorId: { followerId: req.user!.id, creatorId: String(req.params.creatorId) } }, select: { id: true } }); return res.json({ success: true, following: Boolean(following) }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
 
-app.post("/api/social/creators/:creatorId/follow", auth, async (req: AuthRequest, res) => {
+app.post("/api/social/creators/:creatorId/follow", auth, async (req: AuthRequest, res: express.Response) => {
   const creatorId = String(req.params.creatorId);
   if (creatorId === req.user!.id) return fail(res, 400, "You cannot follow yourself.");
   try {
@@ -378,11 +378,11 @@ app.post("/api/social/creators/:creatorId/follow", auth, async (req: AuthRequest
     return res.json({ success: true, following: !existing, followers: await db.creatorFollow.count({ where: { creatorId } }) });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.get("/api/social/creators/:creatorId/followers", async (req, res) => {
+app.get("/api/social/creators/:creatorId/followers", async (req: express.Request, res: express.Response) => {
   try { const creatorId = String(req.params.creatorId); return res.json({ success: true, count: await getPrisma().creatorFollow.count({ where: { creatorId } }) }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
-app.get("/api/messages", auth, async (req: AuthRequest, res) => {
+app.get("/api/messages", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma();
     const memberships = await db.conversationParticipant.findMany({
@@ -403,7 +403,7 @@ app.get("/api/messages", auth, async (req: AuthRequest, res) => {
     return res.json({ success: true, data });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.post("/api/messages/conversations", auth, async (req: AuthRequest, res) => {
+app.post("/api/messages/conversations", auth, async (req: AuthRequest, res: express.Response) => {
   const recipientId = socialText(req.body?.recipientId, 100);
   if (!recipientId || recipientId === req.user!.id) return fail(res, 400, "Choose another user to message.");
   try {
@@ -417,7 +417,7 @@ app.post("/api/messages/conversations", auth, async (req: AuthRequest, res) => {
     return res.status(201).json({ success: true, data: conversation });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.get("/api/messages/:conversationId", auth, async (req: AuthRequest, res) => {
+app.get("/api/messages/:conversationId", auth, async (req: AuthRequest, res: express.Response) => {
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
   try {
     const db = getPrisma(), conversationId = String(req.params.conversationId);
@@ -430,7 +430,7 @@ app.get("/api/messages/:conversationId", auth, async (req: AuthRequest, res) => 
     return res.json({ success: true, data: messages.reverse().map(m => ({ ...m, body: m.deletedAt ? "Message deleted" : m.body })) });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.post("/api/messages/:conversationId", auth, communityRateLimit, async (req: AuthRequest, res) => {
+app.post("/api/messages/:conversationId", auth, communityRateLimit, async (req: AuthRequest, res: express.Response) => {
   const body = socialText(req.body?.body, 4000);
   if (!body) return fail(res, 400, "Message cannot be empty.");
   try {
@@ -451,7 +451,7 @@ app.post("/api/messages/:conversationId", auth, communityRateLimit, async (req: 
     return res.status(201).json({ success: true, data: message });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.patch("/api/messages/message/:messageId", auth, async (req: AuthRequest, res) => {
+app.patch("/api/messages/message/:messageId", auth, async (req: AuthRequest, res: express.Response) => {
   const body = socialText(req.body?.body, 4000);
   if (!body) return fail(res, 400, "Message cannot be empty.");
   try {
@@ -466,7 +466,7 @@ app.patch("/api/messages/message/:messageId", auth, async (req: AuthRequest, res
   } catch (e) { return databaseUnavailable(res, e); }
 });
 
-app.patch("/api/messages/:conversationId/settings", auth, async (req: AuthRequest, res) => {
+app.patch("/api/messages/:conversationId/settings", auth, async (req: AuthRequest, res: express.Response) => {
   const conversationId = String(req.params.conversationId);
   const update: { muted?: boolean; archivedAt?: Date | null } = {};
   if (typeof req.body?.muted === "boolean") update.muted = req.body.muted;
@@ -481,7 +481,7 @@ app.patch("/api/messages/:conversationId/settings", auth, async (req: AuthReques
   } catch (e) { return databaseUnavailable(res, e); }
 });
 
-app.post("/api/messages/message/:messageId/report", auth, communityRateLimit, async (req: AuthRequest, res) => {
+app.post("/api/messages/message/:messageId/report", auth, communityRateLimit, async (req: AuthRequest, res: express.Response) => {
   const reason = socialText(req.body?.reason, 1000); if (reason.length < 5) return fail(res, 400, "Please provide a reason of at least 5 characters.");
   try {
     const db = getPrisma(), message = await db.message.findUnique({ where: { id: String(req.params.messageId) }, select: { id: true, conversationId: true, senderId: true } });
@@ -496,7 +496,7 @@ app.post("/api/messages/message/:messageId/report", auth, communityRateLimit, as
   } catch (e) { return databaseUnavailable(res, e); }
 });
 
-app.delete("/api/messages/message/:messageId", auth, async (req: AuthRequest, res) => {
+app.delete("/api/messages/message/:messageId", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma(), message = await db.message.findUnique({ where: { id: String(req.params.messageId) } });
     if (!message) return fail(res, 404, "Message not found.");
@@ -507,7 +507,7 @@ app.delete("/api/messages/message/:messageId", auth, async (req: AuthRequest, re
     return res.json({ success: true });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.post("/api/users/:userId/block", auth, async (req: AuthRequest, res) => {
+app.post("/api/users/:userId/block", auth, async (req: AuthRequest, res: express.Response) => {
   const blockedId = String(req.params.userId);
   if (blockedId === req.user!.id) return fail(res, 400, "You cannot block yourself.");
   try {
@@ -517,11 +517,11 @@ app.post("/api/users/:userId/block", auth, async (req: AuthRequest, res) => {
     return res.json({ success: true });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.delete("/api/users/:userId/block", auth, async (req: AuthRequest, res) => {
+app.delete("/api/users/:userId/block", auth, async (req: AuthRequest, res: express.Response) => {
   try { await getPrisma().userBlock.deleteMany({ where: { blockerId: req.user!.id, blockedId: String(req.params.userId) } }); return res.json({ success: true }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
-app.get("/api/notifications", auth, async (req: AuthRequest, res) => {
+app.get("/api/notifications", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma(), page = Math.max(1, Number(req.query.page) || 1), limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
     const [data, unread] = await Promise.all([
@@ -531,21 +531,21 @@ app.get("/api/notifications", auth, async (req: AuthRequest, res) => {
     return res.json({ success: true, data, unread });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.patch("/api/notifications/:id/read", auth, async (req: AuthRequest, res) => {
+app.patch("/api/notifications/:id/read", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const result = await getPrisma().notification.updateMany({ where: { id: String(req.params.id), userId: req.user!.id }, data: { readAt: new Date() } });
     if (!result.count) return fail(res, 404, "Notification not found.");
     return res.json({ success: true });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.post("/api/notifications/read-all", auth, async (req: AuthRequest, res) => {
+app.post("/api/notifications/read-all", auth, async (req: AuthRequest, res: express.Response) => {
   try { await getPrisma().notification.updateMany({ where: { userId: req.user!.id, readAt: null }, data: { readAt: new Date() } }); return res.json({ success: true }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
 
 
 // Generic like endpoints for chapter, video, and creator targets. Story-specific routes remain backward-compatible.
-app.get("/api/social/targets/:targetType/:targetId/like", auth, async (req: AuthRequest, res) => {
+app.get("/api/social/targets/:targetType/:targetId/like", auth, async (req: AuthRequest, res: express.Response) => {
   const targetType = String(req.params.targetType).toUpperCase();
   if (!["CHAPTER", "VIDEO", "CREATOR"].includes(targetType)) return fail(res, 400, "Unsupported like target.");
   try {
@@ -553,7 +553,7 @@ app.get("/api/social/targets/:targetType/:targetId/like", auth, async (req: Auth
     return res.json({ success: true, liked: Boolean(item) });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.post("/api/social/targets/:targetType/:targetId/like", auth, async (req: AuthRequest, res) => {
+app.post("/api/social/targets/:targetType/:targetId/like", auth, async (req: AuthRequest, res: express.Response) => {
   const targetType = String(req.params.targetType).toUpperCase();
   const targetId = String(req.params.targetId);
   if (!["CHAPTER", "VIDEO", "CREATOR"].includes(targetType)) return fail(res, 400, "Unsupported like target.");
@@ -563,7 +563,7 @@ app.post("/api/social/targets/:targetType/:targetId/like", auth, async (req: Aut
     if (targetType === "CHAPTER") {
       const target = await db.chapter.findUnique({ where: { id: targetId }, include: { story: { select: { creatorId: true, title: true, publication: true } } } });
       if (!target || target.publication !== "PUBLISHED" || target.story.publication !== "PUBLISHED") return fail(res, 404, "Published chapter not found.");
-      ownerId = target.story.creatorId; targetName = `${target.story.title} â€” ${target.title}`;
+      ownerId = target.story.creatorId; targetName = `${target.story.title} — ${target.title}`;
     } else if (targetType === "VIDEO") {
       const target = await db.video.findUnique({ where: { id: targetId }, select: { id: true, title: true, uploaderId: true } });
       if (!target) return fail(res, 404, "Video not found.");
@@ -588,7 +588,7 @@ app.post("/api/social/targets/:targetType/:targetId/like", auth, async (req: Aut
     return res.json({ success: true, liked: !existing, likes });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.post("/api/social/comments/:id/report", auth, communityRateLimit, async (req: AuthRequest, res) => {
+app.post("/api/social/comments/:id/report", auth, communityRateLimit, async (req: AuthRequest, res: express.Response) => {
   const reason = socialText(req.body?.reason, 1000);
   if (reason.length < 5) return fail(res, 400, "Please provide a reason of at least 5 characters.");
   try {
@@ -601,13 +601,13 @@ app.post("/api/social/comments/:id/report", auth, communityRateLimit, async (req
   } catch (e) { return databaseUnavailable(res, e); }
 });
 
-app.get("/api/notification-preferences", auth, async (req: AuthRequest, res) => {
+app.get("/api/notification-preferences", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const preferences = await getPrisma().notificationPreference.upsert({ where: { userId: req.user!.id }, create: { userId: req.user!.id }, update: {} });
     return res.json({ success: true, data: preferences });
   } catch (e) { return databaseUnavailable(res, e); }
 });
-app.put("/api/notification-preferences", auth, async (req: AuthRequest, res) => {
+app.put("/api/notification-preferences", auth, async (req: AuthRequest, res: express.Response) => {
   const allowed = ["likes", "follows", "comments", "messages", "newChapters"] as const;
   const data: { likes?: boolean; follows?: boolean; comments?: boolean; messages?: boolean; newChapters?: boolean } = {};
   for (const key of allowed) if (typeof req.body?.[key] === "boolean") data[key] = req.body[key];
@@ -618,7 +618,7 @@ app.put("/api/notification-preferences", auth, async (req: AuthRequest, res) => 
   } catch (e) { return databaseUnavailable(res, e); }
 });
 
-app.get("/api/health", async (_req, res) => {
+app.get("/api/health", async (_req: express.Request, res: express.Response) => {
   try { await getPrisma().$queryRaw`SELECT 1`; return res.json({ success: true, message: "KathaVerse API is running", database: "connected" }); }
   catch (error) { return databaseUnavailable(res, error); }
 });
@@ -640,10 +640,10 @@ async function bootstrapAdmin() {
   console.log(`Initial admin account provisioned for ${email}.`);
 }
 
-app.post("/api/auth/register", authRateLimit, async (req, res) => {
+app.post("/api/auth/register", authRateLimit, async (req: express.Request, res: express.Response) => {
   try {
     const username = String(req.body?.username || "").trim().toLowerCase(); const email = String(req.body?.email || "").trim().toLowerCase(); const password = String(req.body?.password || ""); const displayName = String(req.body?.displayName || "").trim().slice(0, 80); const role = req.body?.role === "CREATOR" ? "CREATOR" : "USER";
-    if (!/^[a-z0-9_]{3,24}$/.test(username)) return fail(res, 400, "Username must be 3â€“24 characters using letters, numbers, or underscores.");
+    if (!/^[a-z0-9_]{3,24}$/.test(username)) return fail(res, 400, "Username must be 3–24 characters using letters, numbers, or underscores.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return fail(res, 400, "Enter a valid email address.");
     if (password.length < 10 || password.length > 128) return fail(res, 400, "Password must be between 10 and 128 characters.");
     const db = getPrisma();
@@ -654,7 +654,7 @@ app.post("/api/auth/register", authRateLimit, async (req, res) => {
     return res.status(201).json({ success: true, token, user: safeUser(user as AuthUser), message: role === "CREATOR" ? "Creator account created. You can publish stories immediately." : "Reader account created." });
   } catch (error) { if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return fail(res, 409, "That username or email is already registered."); return databaseUnavailable(res, error); }
 });
-app.post("/api/auth/login", authRateLimit, async (req, res) => {
+app.post("/api/auth/login", authRateLimit, async (req: express.Request, res: express.Response) => {
   try {
     const login = String(req.body?.login || req.body?.email || "").trim().toLowerCase(); const password = String(req.body?.password || "");
     if (!login || !password) return fail(res, 400, "Enter your username/email and password.");
@@ -666,7 +666,7 @@ app.post("/api/auth/login", authRateLimit, async (req, res) => {
     return res.json({ success: true, token, user: safeUser(user as AuthUser) });
   } catch (error) { return databaseUnavailable(res, error); }
 });
-app.get("/api/auth/me", auth, async (req: AuthRequest, res) => {
+app.get("/api/auth/me", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const user = await getPrisma().user.findUnique({ where: { id: req.user!.id }, select: { id: true, username: true, email: true, displayName: true, bio: true, avatarPath: true, websiteUrl: true, instagramUrl: true, facebookUrl: true, youtubeUrl: true, tiktokUrl: true, githubUrl: true, linkedinUrl: true, role: true, accountStatus: true } });
     if (!user) return fail(res, 404, "User not found.");
@@ -674,7 +674,7 @@ app.get("/api/auth/me", auth, async (req: AuthRequest, res) => {
   } catch (error) { return databaseUnavailable(res, error); }
 });
 
-app.patch("/api/me/profile", auth, communityRateLimit, async (req: AuthRequest, res) => {
+app.patch("/api/me/profile", auth, communityRateLimit, async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma();
     const textFields = ["displayName", "bio"] as const;
@@ -711,16 +711,16 @@ app.patch("/api/me/profile", auth, communityRateLimit, async (req: AuthRequest, 
     return res.json({ success: true, user, message: "Profile updated successfully." });
   } catch (error) { return databaseUnavailable(res, error); }
 });
-app.post("/api/auth/logout", auth, async (req: AuthRequest, res) => {
+app.post("/api/auth/logout", auth, async (req: AuthRequest, res: express.Response) => {
   try { const token = (req.header("authorization") || "").slice(7).trim(); await getPrisma().session.deleteMany({ where: { tokenHash: crypto.createHash("sha256").update(token).digest("hex") } }); return res.json({ success: true }); }
   catch (error) { return databaseUnavailable(res, error); }
 });
 
-app.get("/api/genres", async (_req, res) => {
+app.get("/api/genres", async (_req: express.Request, res: express.Response) => {
   try { const genres = await getPrisma().genre.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, slug: true } }); return res.json({ success: true, data: genres }); }
   catch (error) { return databaseUnavailable(res, error); }
 });
-app.get("/api/stories", async (req, res) => {
+app.get("/api/stories", async (req: express.Request, res: express.Response) => {
   try {
     const db = getPrisma(); const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 100) : ""; const genre = typeof req.query.genre === "string" ? req.query.genre.trim() : "";
     const status = typeof req.query.status === "string" ? req.query.status.toUpperCase() : ""; const page = Math.max(1, Number.parseInt(String(req.query.page ?? "1"), 10) || 1); const limit = Math.max(1, Math.min(48, Number.parseInt(String(req.query.limit ?? "24"), 10) || 24)); const sort = typeof req.query.sort === "string" ? req.query.sort : "updated";
@@ -730,24 +730,24 @@ app.get("/api/stories", async (req, res) => {
     return res.json({ success: true, data: stories, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (error) { return databaseUnavailable(res, error); }
 });
-app.get("/api/stories/:slug", async (req, res) => {
+app.get("/api/stories/:slug", async (req: express.Request, res: express.Response) => {
   try {
     const story = await getPrisma().story.findFirst({ where: { slug: String(req.params.slug), publication: "PUBLISHED" }, select: { id: true, slug: true, title: true, synopsis: true, coverPath: true, status: true, contentType: true, createdAt: true, updatedAt: true, publishedAt: true, creator: { select: { id: true, username: true, displayName: true, bio: true } }, genres: { include: { genre: { select: { name: true, slug: true } } } }, chapters: { where: { publication: "PUBLISHED" }, orderBy: { number: "asc" }, select: { id: true, number: true, title: true, publishedAt: true } }, _count: { select: { bookmarks: true, ratings: true, comments: true } } } });
     if (!story) return fail(res, 404, "Story not found"); return res.json({ success: true, data: story });
   } catch (error) { return databaseUnavailable(res, error); }
 });
-app.get("/api/reading-progress/:chapterId", auth, async (req: AuthRequest, res) => {
+app.get("/api/reading-progress/:chapterId", auth, async (req: AuthRequest, res: express.Response) => {
   try { const chapterId = String(req.params.chapterId); const chapter = await getPrisma().chapter.findFirst({ where: { id: chapterId, publication: "PUBLISHED", story: { publication: "PUBLISHED" } }, select: { id: true } }); if (!chapter) return fail(res, 404, "Published chapter not found."); const progress = await getPrisma().readingProgress.findUnique({ where: { userId_chapterId: { userId: req.user!.id, chapterId } } }); return res.json({ success: true, data: progress }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
-app.put("/api/reading-progress/:chapterId", auth, async (req: AuthRequest, res) => {
+app.put("/api/reading-progress/:chapterId", auth, async (req: AuthRequest, res: express.Response) => {
   const scrollPercentage = Number(req.body?.scrollPercentage); const lastPanelPosition = Number(req.body?.lastPanelPosition ?? 0);
   if (!Number.isFinite(scrollPercentage) || scrollPercentage < 0 || scrollPercentage > 100 || !Number.isInteger(lastPanelPosition) || lastPanelPosition < 0 || lastPanelPosition > 10000) return fail(res, 400, "Invalid reading progress.");
   try { const db = getPrisma(), chapterId = String(req.params.chapterId); const chapter = await db.chapter.findFirst({ where: { id: chapterId, publication: "PUBLISHED", story: { publication: "PUBLISHED" } }, select: { id: true } }); if (!chapter) return fail(res, 404, "Published chapter not found."); const data = await db.readingProgress.upsert({ where: { userId_chapterId: { userId: req.user!.id, chapterId } }, create: { userId: req.user!.id, chapterId, scrollPercentage, lastPanelPosition }, update: { scrollPercentage, lastPanelPosition } }); return res.json({ success: true, data }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
 
-app.get("/api/chapters/:chapterId", async (req, res) => {
+app.get("/api/chapters/:chapterId", async (req: express.Request, res: express.Response) => {
   try {
     const chapter = await getPrisma().chapter.findFirst({ where: { id: String(req.params.chapterId), publication: "PUBLISHED", story: { publication: "PUBLISHED" } }, select: { id: true, number: true, title: true, content: true, publishedAt: true, story: { select: { slug: true, title: true, contentType: true } }, panels: { orderBy: { position: "asc" }, select: { id: true, imagePath: true, position: true, width: true, height: true } } } });
     if (!chapter) return fail(res, 404, "Chapter not found"); return res.json({ success: true, data: chapter });
@@ -755,15 +755,15 @@ app.get("/api/chapters/:chapterId", async (req, res) => {
 });
 
 // Creator workspace: any registered account starts as CREATOR and may publish immediately.
-app.get("/api/bookmarks", auth, async (req: AuthRequest, res) => {
+app.get("/api/bookmarks", auth, async (req: AuthRequest, res: express.Response) => {
   try { const data = await getPrisma().bookmark.findMany({ where: { userId: req.user!.id, story: { publication: "PUBLISHED" } }, orderBy: { createdAt: "desc" }, include: { story: { select: { id: true, slug: true, title: true, synopsis: true, coverPath: true, status: true, contentType: true, genres: { include: { genre: { select: { name: true } } } } } } } }); return res.json({ success: true, data }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
-app.get("/api/bookmarks/:storyId", auth, async (req: AuthRequest, res) => {
+app.get("/api/bookmarks/:storyId", auth, async (req: AuthRequest, res: express.Response) => {
   try { const exists = await getPrisma().bookmark.findUnique({ where: { userId_storyId: { userId: req.user!.id, storyId: String(req.params.storyId) } }, select: { id: true } }); return res.json({ success: true, saved: Boolean(exists) }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
-app.post("/api/bookmarks/:storyId", auth, async (req: AuthRequest, res) => {
+app.post("/api/bookmarks/:storyId", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma(), storyId = String(req.params.storyId);
     const story = await db.story.findFirst({ where: { id: storyId, publication: "PUBLISHED" }, select: { id: true } });
@@ -775,7 +775,7 @@ app.post("/api/bookmarks/:storyId", auth, async (req: AuthRequest, res) => {
   } catch (e) { return databaseUnavailable(res, e); }
 });
 
-app.get("/api/me/activity", auth, async (req: AuthRequest, res) => {
+app.get("/api/me/activity", auth, async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma(), userId = req.user!.id;
     const [likes, ratings, comments, follows, bookmarks, readingProgress, _unreadNotifications] = await Promise.all([
@@ -795,7 +795,7 @@ app.get("/api/me/activity", auth, async (req: AuthRequest, res) => {
   } catch (e) { return databaseUnavailable(res, e); }
 });
 
-app.get("/api/creator/analytics", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res) => {
+app.get("/api/creator/analytics", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma();
     const stories = await db.story.findMany({ where: req.user!.role === "ADMIN" && req.query.creatorId ? { creatorId: String(req.query.creatorId) } : req.user!.role === "ADMIN" ? {} : { creatorId: req.user!.id }, select: { id: true, title: true, slug: true, creatorId: true, ratings: { select: { score: true } }, _count: { select: { comments: true, chapters: true } } }, orderBy: { updatedAt: "desc" }, take: 100 });
@@ -818,11 +818,11 @@ app.get("/api/creator/analytics", auth, roles("CREATOR", "ADMIN"), async (req: A
   } catch (e) { return databaseUnavailable(res, e); }
 });
 
-app.get("/api/creator/stories", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res) => {
+app.get("/api/creator/stories", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res: express.Response) => {
   try { const data = await getPrisma().story.findMany({ where: req.user!.role === "ADMIN" ? {} : { creatorId: req.user!.id }, orderBy: { updatedAt: "desc" }, include: { genres: { include: { genre: true } }, chapters: { orderBy: { number: "asc" }, include: { _count: { select: { panels: true } } } } } }); return res.json({ success: true, data }); }
   catch (error) { return databaseUnavailable(res, error); }
 });
-app.post("/api/creator/stories", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res) => {
+app.post("/api/creator/stories", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res: express.Response) => {
   try {
     const title = String(req.body?.title || "").trim().slice(0, 160); const synopsis = String(req.body?.synopsis || "").trim().slice(0, 5000); const contentType = req.body?.contentType === "MANHWA" ? "MANHWA" : req.body?.contentType === "BOTH" ? "BOTH" : "NOVEL";
     if (title.length < 2 || synopsis.length < 10) return fail(res, 400, "Enter a title and a synopsis of at least 10 characters.");
@@ -833,14 +833,14 @@ app.post("/api/creator/stories", auth, roles("CREATOR", "ADMIN"), async (req: Au
     return res.status(201).json({ success: true, data: story, message: "Story published." });
   } catch (error) { if (error instanceof Error && (error.message.startsWith("Only ") || error.message.startsWith("The selected file") || error.message.startsWith("Each image") || error.message.startsWith("Choose an image"))) return fail(res, 400, error.message); return databaseUnavailable(res, error); }
 });
-app.patch("/api/creator/stories/:id", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res) => {
+app.patch("/api/creator/stories/:id", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma(); const existing = await db.story.findUnique({ where: { id: String(req.params.id) } }); if (!existing) return fail(res, 404, "Story not found"); if (req.user!.role !== "ADMIN" && existing.creatorId !== req.user!.id) return fail(res, 403, "You can only edit your own stories.");
     const data: Prisma.StoryUpdateInput = {}; if (typeof req.body?.title === "string" && req.body.title.trim()) data.title = req.body.title.trim().slice(0, 160); if (typeof req.body?.synopsis === "string") data.synopsis = req.body.synopsis.trim().slice(0, 5000); if (["NOVEL", "MANHWA", "BOTH"].includes(req.body?.contentType)) data.contentType = req.body.contentType; if (["ONGOING", "COMPLETED", "HIATUS"].includes(req.body?.status)) data.status = req.body.status; if (req.body?.coverData) data.coverPath = await saveImageData(req.body.coverData); else if (typeof req.body?.coverUrl === "string" && /^https:\/\//i.test(req.body.coverUrl)) data.coverPath = req.body.coverUrl;
     const story = await db.story.update({ where: { id: existing.id }, data }); return res.json({ success: true, data: story });
   } catch (error) { return databaseUnavailable(res, error); }
 });
-app.post("/api/creator/stories/:id/chapters", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res) => {
+app.post("/api/creator/stories/:id/chapters", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma(); const story = await db.story.findUnique({ where: { id: String(req.params.id) } }); if (!story) return fail(res, 404, "Story not found"); if (req.user!.role !== "ADMIN" && story.creatorId !== req.user!.id) return fail(res, 403, "You can only add chapters to your own stories.");
     const title = String(req.body?.title || "").trim().slice(0, 160); const content = typeof req.body?.content === "string" ? req.body.content.trim().slice(0, 500000) : ""; const number = Number.parseInt(String(req.body?.number || ""), 10);
@@ -860,7 +860,7 @@ app.post("/api/creator/stories/:id/chapters", auth, roles("CREATOR", "ADMIN"), a
     return res.status(201).json({ success: true, data: chapter, message: "Chapter published." });
   } catch (error) { if (error instanceof Error && (error.message.startsWith("Only ") || error.message.startsWith("The selected file") || error.message.startsWith("Each image") || error.message.startsWith("Choose an image"))) return fail(res, 400, error.message); if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return fail(res, 409, "That chapter number already exists for this story."); return databaseUnavailable(res, error); }
 });
-app.delete("/api/creator/stories/:id", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res) => {
+app.delete("/api/creator/stories/:id", auth, roles("CREATOR", "ADMIN"), async (req: AuthRequest, res: express.Response) => {
   try {
     const db = getPrisma();
     const story = await db.story.findUnique({ where: { id: String(req.params.id) }, include: { chapters: { include: { panels: { select: { imagePath: true } } } } } });
@@ -874,15 +874,15 @@ app.delete("/api/creator/stories/:id", auth, roles("CREATOR", "ADMIN"), async (r
   catch (error) { return databaseUnavailable(res, error); }
 });
 
-app.get("/api/admin/overview", auth, roles("ADMIN"), async (_req, res) => {
+app.get("/api/admin/overview", auth, roles("ADMIN"), async (_req: express.Request, res: express.Response) => {
   try { const db = getPrisma(); const [users, creators, stories, chapters, reports, pendingReports] = await Promise.all([db.user.count(), db.user.count({ where: { role: "CREATOR" } }), db.story.count(), db.chapter.count(), db.contentReport.count(), db.contentReport.count({ where: { status: "PENDING" } })]); return res.json({ success: true, data: { users, creators, stories, chapters, reports, pendingReports } }); }
   catch (error) { return databaseUnavailable(res, error); }
 });
-app.get("/api/admin/users", auth, roles("ADMIN"), async (_req, res) => {
+app.get("/api/admin/users", auth, roles("ADMIN"), async (_req: express.Request, res: express.Response) => {
   try { const users = await getPrisma().user.findMany({ orderBy: { createdAt: "desc" }, take: 300, select: { id: true, username: true, email: true, displayName: true, role: true, accountStatus: true, createdAt: true } }); return res.json({ success: true, data: users }); }
   catch (error) { return databaseUnavailable(res, error); }
 });
-app.patch("/api/admin/users/:id", auth, roles("ADMIN"), async (req: AuthRequest, res) => {
+app.patch("/api/admin/users/:id", auth, roles("ADMIN"), async (req: AuthRequest, res: express.Response) => {
   try {
     if (String(req.params.id) === req.user!.id) return fail(res, 400, "You cannot change your own admin account here.");
     const role = ["USER", "CREATOR", "ADMIN"].includes(req.body?.role) ? req.body.role : undefined;
@@ -901,29 +901,29 @@ app.patch("/api/admin/users/:id", auth, roles("ADMIN"), async (req: AuthRequest,
   }
   catch (error) { return databaseUnavailable(res, error); }
 });
-app.get("/api/admin/stories", auth, roles("ADMIN"), async (_req, res) => {
+app.get("/api/admin/stories", auth, roles("ADMIN"), async (_req: express.Request, res: express.Response) => {
   try { const data = await getPrisma().story.findMany({ orderBy: { createdAt: "desc" }, take: 300, include: { creator: { select: { username: true, email: true } }, _count: { select: { chapters: true } } } }); return res.json({ success: true, data }); }
   catch (error) { return databaseUnavailable(res, error); }
 });
-app.patch("/api/admin/stories/:id", auth, roles("ADMIN"), async (req, res) => {
+app.patch("/api/admin/stories/:id", auth, roles("ADMIN"), async (req: express.Request, res: express.Response) => {
   try { const publication = ["DRAFT", "PUBLISHED", "UNPUBLISHED"].includes(req.body?.publication) ? req.body.publication : undefined; const status = ["ONGOING", "COMPLETED", "HIATUS"].includes(req.body?.status) ? req.body.status : undefined; if (!publication && !status) return fail(res, 400, "Provide a valid publication or status."); const data = await getPrisma().story.update({ where: { id: String(req.params.id) }, data: { ...(publication ? { publication } : {}), ...(status ? { status } : {}), ...(publication === "PUBLISHED" ? { publishedAt: new Date() } : {}) } }); return res.json({ success: true, data }); }
   catch (error) { return databaseUnavailable(res, error); }
 });
-app.get("/api/admin/message-reports", auth, roles("ADMIN"), async (_req, res) => {
+app.get("/api/admin/message-reports", auth, roles("ADMIN"), async (_req: express.Request, res: express.Response) => {
   try { const data = await getPrisma().messageReport.findMany({ orderBy: { createdAt: "desc" }, take: 100, include: { reporter: { select: { id: true, username: true } }, message: { select: { id: true, body: true, deletedAt: true, createdAt: true, sender: { select: { id: true, username: true } } } } } }); return res.json({ success: true, data }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
-app.patch("/api/admin/message-reports/:id", auth, roles("ADMIN"), async (req: AuthRequest, res) => {
+app.patch("/api/admin/message-reports/:id", auth, roles("ADMIN"), async (req: AuthRequest, res: express.Response) => {
   const status = ["REVIEWED", "RESOLVED", "DISMISSED"].includes(req.body?.status) ? req.body.status : undefined;
   if (!status) return fail(res, 400, "Provide a valid moderation status.");
   try { const report = await getPrisma().messageReport.update({ where: { id: String(req.params.id) }, data: { status } }); return res.json({ success: true, data: report }); }
   catch (e) { return databaseUnavailable(res, e); }
 });
-app.get("/api/admin/reports", auth, roles("ADMIN"), async (_req, res) => {
+app.get("/api/admin/reports", auth, roles("ADMIN"), async (_req: express.Request, res: express.Response) => {
   try { const data = await getPrisma().contentReport.findMany({ orderBy: { createdAt: "desc" }, take: 300, include: { reporter: { select: { username: true } }, story: { select: { title: true, slug: true } }, comment: { select: { body: true } }, review: { select: { body: true, story: { select: { title: true, slug: true } } } } } }); return res.json({ success: true, data }); }
   catch (error) { return databaseUnavailable(res, error); }
 });
-app.patch("/api/admin/reports/:id", auth, roles("ADMIN"), async (req, res) => {
+app.patch("/api/admin/reports/:id", auth, roles("ADMIN"), async (req: express.Request, res: express.Response) => {
   try { const status = ["PENDING", "REVIEWED", "RESOLVED", "DISMISSED"].includes(req.body?.status) ? req.body.status : undefined; if (!status) return fail(res, 400, "Provide a valid report status."); const data = await getPrisma().contentReport.update({ where: { id: String(req.params.id) }, data: { status } }); return res.json({ success: true, data }); }
   catch (error) { return databaseUnavailable(res, error); }
 });
@@ -934,7 +934,7 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   console.error("Unhandled API error:", error instanceof Error ? error.message : error);
   return fail(res, 500, "An unexpected server error occurred.");
 });
-app.use((_req, res) => res.status(404).json({ success: false, message: "API endpoint not found" }));
+app.use((_req: express.Request, res: express.Response) => res.status(404).json({ success: false, message: "API endpoint not found" }));
 const server = app.listen(port, async () => {
   console.log(`KathaVerse API running at http://localhost:${port}`);
   if (!process.env.DATABASE_URL || process.env.DATABASE_URL.includes("YOUR_PASSWORD")) console.warn("DATABASE_URL is not configured. API is running, but database endpoints will return HTTP 503 until server/.env is configured.");
